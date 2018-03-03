@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #define CMDMAX 80
 #define TOKENSMAX 50
@@ -16,7 +17,7 @@ void tokenize(char* input, char* argv[])
 		of tokens is 50, and max token length is
 		1000
 	*/
-	char* tokens = strtok(input, " ");
+	char* tokens = strtok(input, " \n");
 	int tokenIndex = 0;
 
 	while(tokens!=NULL)
@@ -93,24 +94,42 @@ int main(){
 	tokenize(input, argv);
 
 	pid_t pid;
+	int fd[2];
+
+	int p = pipe(fd);
+	if(p<0)
+	{
+		printf("%s\n", "Failed to pipe");
+		exit(1);
+	}
 
 	pid = fork();
+	printf("%u",pid);
 	if (pid < 0)
 	{
 		printf("%s\n", "Fork Failed");
 		exit(1);
 	}
 	else if (pid == 0)
-	{
-		printf("%s\n", "Child will run");
-		printStringArray(argv);
-		execvp(argv[0], argv);
-		exit(0);
+	{	
+		//remove stdout from fdlist
+		close(1);
+		//replace it with pipe write
+		dup(fd[1]);
+		//close pipe
+		close(fd[0]);
+		close(fd[1]);
+		//initiate exec
+		execvp(argv[0],argv);
 	}
 	else
 	{
-		wait(0);
-		printf("%s\n", "Child finished, parent will terminate");
+		char buffer[4096];
+		close(fd[1]);
+		int bytes = read(fd[0],buffer,sizeof(buffer));
+		printf("%u\n", bytes);
+		printf("%s\n", buffer);
+		wait(NULL);
 	}
 
 
