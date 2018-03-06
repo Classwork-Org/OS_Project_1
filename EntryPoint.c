@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 
 #define CMDMAX 80
-#define HISTMAX 100
+#define HISTMAX 3
 #define TOKENSMAX 50
 #define TOKENLEN 1000
 #define MAX_LEN 128
@@ -22,18 +22,19 @@ void tokenize(char* input, char* argv[])
 	char* tempStorage = (char*)malloc(strlen(input)*sizeof(char));
 	strcpy(tempStorage, input);
 
-	char* tokens = strtok(input, " \n");
+	char* tokens = strtok(input, " \n\t");
 	int tokenIndex = 0;
 
 	while(tokens!=NULL)
 	{
-		argv[tokenIndex] = (char*)malloc(TOKENLEN*sizeof(char));
+		argv[tokenIndex] = (char*)malloc(strlen(tokens)*sizeof(char));
 		strcpy(argv[tokenIndex++],tokens);
-		tokens = strtok(NULL," \n");
+		tokens = strtok(NULL," \n\t");
 	}
 
 	argv[tokenIndex] = NULL;
 	strcpy(input, tempStorage);
+	free(tempStorage);
 }
 
 void printWelcomeMessage()
@@ -69,8 +70,10 @@ void getCommand(char** input)
 		Dereference and pass to getline
 		(contrived I know)
 	*/
+	fflush(stdout);
 	size_t inputSize = CMDMAX;
 	do{
+		printf("%s", ">>>");
 		if(getline(&*input, &inputSize, stdin) < 0)
 		{
 			printf("%s\n", "Unable to allocate input\
@@ -98,7 +101,11 @@ int isExit(char* input){
 }
 
 void saveCommandToHistory(char** history, char* cmd, int index){
-	history[index] = (char*)malloc(CMDMAX*sizeof(char));
+	if(history[index] == NULL || strlen(history[index]) < CMDMAX)
+	{
+		history[index] = (char*)malloc(CMDMAX*sizeof(char));
+	}
+
 	strcpy(history[index], cmd);
 }
 
@@ -142,10 +149,11 @@ int main(){
 	clearStringArray(history, HISTMAX);
 
 	char* input = NULL;
-	getCommand(&input);
 
 	char* argv[TOKENSMAX];
 	clearStringArray(argv, TOKENSMAX);
+
+	getCommand(&input);
 	tokenize(input, argv);
 
 	//doesn't make sense to make a history request here
@@ -166,8 +174,8 @@ int main(){
 		return 0;
 	}
 
-	saveCommandToHistory(history, input, historyIndex++);
-	
+	saveCommandToHistory(history, input, historyIndex);
+
 	do{
 
 		//process command
@@ -183,7 +191,7 @@ int main(){
 		}
 
 		pid = fork();
-		printf("%u",pid);
+
 		if (pid < 0)
 		{
 			printf("%s\n", "Fork Failed");
@@ -193,6 +201,7 @@ int main(){
 		{	
 			if(ALLOWPIPELINING)
 			{
+				//remove stdout from fdlist		
 				close(1);
 				//replace it with pipe write
 				dup(fd[1]);
@@ -201,8 +210,10 @@ int main(){
 				close(fd[1]);
 				//initiate exec
 			}
-			//remove stdout from fdlist
-			execvp(argv[0],argv);
+			int status = execvp(argv[0],argv);
+			printf("%s\n", "Invalid Command");
+			//if failed then program will not be replaced by argv[0]
+			exit(status);
 		}
 		else
 		{
@@ -216,12 +227,14 @@ int main(){
 			else{
 				if(backgroundFlag == 0)
 				{
-					wait(NULL);
+					while(wait(NULL)!=pid);
 				}
 				else
 				{
-					backgroundFlag = 0; //reset background flag if it was a background process
+					int status;
+					waitpid(-1,&status,WNOHANG);
 				}
+				backgroundFlag = 0; //reset background flag if it was a background process
 			}
 		}
 
@@ -238,10 +251,10 @@ int main(){
 				if(argv[1] == NULL) // just !!
 				{
 					invalidHistoryIndex = 0;
-					printf("%s\n", history[historyIndex-1]);
-					tokenize(history[historyIndex-1], argv);
+					printf("%s\n", history[historyIndex]);
+					tokenize(history[historyIndex], argv);
 				}
-				else if(atoi(argv[1]) < historyIndex) // !! with index
+				else if(atoi(argv[1]) < HISTMAX) // ! with index
 				{
 					invalidHistoryIndex = 0;
 					printf("%s\n", history[atoi(argv[1])]);
@@ -256,8 +269,16 @@ int main(){
 				}
 			}
 			else
-			{
-				saveCommandToHistory(history, input, historyIndex++);
+			{		
+				if(historyIndex<HISTMAX-1)
+				{
+					historyIndex++;
+				}
+				else
+				{
+					historyIndex = 0;
+				}
+				saveCommandToHistory(history, input, historyIndex);
 			}
 
 		}while(invalidHistoryIndex);
