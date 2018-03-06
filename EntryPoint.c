@@ -11,6 +11,22 @@
 #define MAX_LEN 128
 #define ALLOWPIPELINING 0
 
+void clearAndResetStringArray(char* arr[], int arrMax, int strMax)
+{
+	int i = 0;
+	for(i = 0; i<arrMax; i++)
+	{
+		if(arr[i] == NULL)
+		{
+			arr[i] = (char*)malloc(strMax*sizeof(char));
+		}
+	}
+}
+
+void test(){
+}
+
+
 void tokenize(char* input, char* argv[])
 {
 	/*
@@ -19,20 +35,28 @@ void tokenize(char* input, char* argv[])
 		of tokens is 50, and max token length is
 		1000
 	*/
-	char* tempStorage = (char*)malloc(strlen(input)*sizeof(char));
+	//reset argv array
+	clearAndResetStringArray(argv, TOKENSMAX, TOKENLEN);
+
+	//add extra byte for null character
+	char* tempStorage = (char*)malloc(strlen(input)*sizeof(char)+1);
 	strcpy(tempStorage, input);
 
 	char* tokens = strtok(input, " \n\t");
 	int tokenIndex = 0;
 
+
 	while(tokens!=NULL)
 	{
-		argv[tokenIndex] = (char*)malloc(strlen(tokens)*sizeof(char));
 		strcpy(argv[tokenIndex++],tokens);
 		tokens = strtok(NULL," \n\t");
 	}
 
-	argv[tokenIndex] = NULL;
+	if(argv[tokenIndex] != NULL)
+	{
+		free(argv[tokenIndex]);
+		argv[tokenIndex] = NULL;
+	}
 	strcpy(input, tempStorage);
 	free(tempStorage);
 }
@@ -100,25 +124,33 @@ int isExit(char* input){
 	return !strcmp(input,"exit");
 }
 
-void saveCommandToHistory(char** history, char* cmd, int index){
-	if(history[index] == NULL || strlen(history[index]) < CMDMAX)
-	{
-		history[index] = (char*)malloc(CMDMAX*sizeof(char));
-	}
+void saveCommandToHistory(char* history[], char* cmd, int index){
 
 	strcpy(history[index], cmd);
+}
+
+void deallocStringArray(char* arr[], int size)
+{
+	int i = 0;
+	for(i = 0; i < size; i++)
+	{
+		if(arr[i]!= NULL){
+			free(arr[i]);
+		}
+	}
+
 }
 
 int isHistoryRequest(char* cmd){
 	return !(strcmp(cmd, "!!") && strcmp(cmd, "!"));
 }
 
-void clearStringArray(char* arr[], int arrMax)
+void setAllArrayPointersToNull(char* arr[], int size)
 {
 	int i = 0;
-	for(i = 0; i<arrMax; i++)
+	for(i = 0; i<size; i++)
 	{
-		arr[i] = "\0";
+		arr[i] = NULL;
 	}
 }
 
@@ -146,13 +178,17 @@ int main(){
 
 	int historyIndex = 0;
 	char* history[HISTMAX];
-	clearStringArray(history, HISTMAX);
+	setAllArrayPointersToNull(history,HISTMAX);
+	clearAndResetStringArray(history, HISTMAX, CMDMAX);
 
 	char* input = NULL;
 
 	char* argv[TOKENSMAX];
-	clearStringArray(argv, TOKENSMAX);
+	setAllArrayPointersToNull(argv, TOKENSMAX);
+	clearAndResetStringArray(argv, TOKENSMAX, TOKENLEN);
 
+	//get first command here. This is done to prevent 
+	//calls to history first with nothing actually in it
 	getCommand(&input);
 	tokenize(input, argv);
 
@@ -160,6 +196,7 @@ int main(){
 	//so prevent it
 	while(isHistoryRequest(argv[0]))
 	{
+		printf("%s\n", "No commands in history, please try again");
 		getCommand(&input);
 		tokenize(input, argv);
 	}
@@ -210,6 +247,7 @@ int main(){
 				close(fd[1]);
 				//initiate exec
 			}
+
 			int status = execvp(argv[0],argv);
 			printf("%s\n", "Invalid Command");
 			//if failed then program will not be replaced by argv[0]
@@ -289,6 +327,8 @@ int main(){
 		}
 
 	}while(notExit(argv[0]));	
-
+	deallocStringArray(argv, TOKENSMAX);
+	deallocStringArray(history, HISTMAX);
+	free(input);
 	return 0;
 }
