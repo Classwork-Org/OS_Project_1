@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 
 #define CMDMAX 80
-#define HISTMAX 3
+#define HISTMAX 10
 #define TOKENSMAX 50
 #define TOKENLEN 1000
 #define MAX_LEN 128
@@ -236,6 +236,7 @@ int main(){
 		}
 		else if (pid == 0)
 		{	
+			//child
 			if(ALLOWPIPELINING)
 			{
 				//remove stdout from fdlist		
@@ -255,6 +256,7 @@ int main(){
 		}
 		else
 		{
+			//parent 
 			if(ALLOWPIPELINING)
 			{
 				char buffer[4096] = "";
